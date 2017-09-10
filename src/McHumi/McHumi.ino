@@ -1,26 +1,39 @@
 // *********************************************************************
-// * McHumi - DHT 22 Humidity / temperature logger for MQTT
+// * McHumi - DHT22 and HTU21D Humidity / temperature logger for MQTT
 // * Based on CoogleIOT lib (https://github.com/coogle/CoogleIOT)
 // * and SimpleDHT (https://github.com/winlinvip/SimpleDHT)
 // * by Tobias Blum (https://github.com/toblum)
 // *********************************************************************
 
+// Select which sensor type is used, uncomment the corresponding line
+//#define SENSOR_DHT22
+# define SENSOR_HTU21D
+
 // *********************************************************************
 // * Libraries
 // *********************************************************************
 #include <CoogleIOT.h>
+
+#ifdef SENSOR_DHT22
 #include <SimpleDHT.h>
+#endif
+
+#ifdef SENSOR_HTU21D
+#include <SparkFunHTU21D.h>
+#endif
 
 
 // *********************************************************************
 // * Settings
 // *********************************************************************
 #define COOGLEIOT_DEBUG
-#define MCHUMI_STATUS_TOPIC "McHumi_01"
+#define MCHUMI_STATUS_TOPIC "McHumi_02"
 #define REFRESH_INTERVAL_1    15*1000   // 15 seconds (reading)
 #define REFRESH_INTERVAL_2    60*1000   // 60 seconds (publishing)
-#define PIN_DHT_22 D2
+#define PIN_SENSOR D2
 #define MCHUMI_VERSION "1.02"
+#define COOGLEIOT_TIMEZONE_OFFSET ((3600 * 2) * 1)
+#define COOGLEIOT_DAYLIGHT_OFFSET 0
 
 static unsigned long lastRefreshTime_1 = millis();
 static unsigned long lastRefreshTime_2 = millis();
@@ -39,7 +52,14 @@ bool array_initalized = false;
 // Globals - https://www.arduino.cc/en/Tutorial/Smoothing
 CoogleIOT *iot;
 PubSubClient *mqtt;
+
+#ifdef SENSOR_DHT22
 SimpleDHT22 dht22;
+#endif
+
+#ifdef SENSOR_HTU21D
+HTU21D myHumidity;
+#endif
 
 
 // *********************************************************************
@@ -65,9 +85,11 @@ void read_sensor()
   float temperature = 0;
   float humidity = 0;
 
+
+  #ifdef SENSOR_DHT22
   // Read DHT22
   int err = SimpleDHTErrSuccess;
-  if ((err = dht22.read2(PIN_DHT_22, &temperature, &humidity, NULL)) != SimpleDHTErrSuccess) {
+  if ((err = dht22.read2(PIN_SENSOR, &temperature, &humidity, NULL)) != SimpleDHTErrSuccess) {
     if(iot->serialEnabled()) {
       Serial.print("Read DHT22 failed, err="); 
       Serial.println(err);
@@ -75,6 +97,25 @@ void read_sensor()
     }
     return;
   }
+  #endif
+
+  #ifdef SENSOR_HTU21D
+  humidity = myHumidity.readHumidity();
+  temperature = myHumidity.readTemperature();
+
+  if (humidity > 100 || temperature > 100) {
+    if(iot->serialEnabled()) {
+      Serial.println("Read HTU21D failed"); 
+      Serial.print("Failed temperature: ");
+      Serial.println(temperature, 1);
+      Serial.print("Failed humidity: ");
+      Serial.println(humidity, 1);
+      delay(2000);
+    }
+    return;
+  }
+  #endif
+
 
   // Init array
   if (!array_initalized) {
@@ -103,7 +144,6 @@ void read_sensor()
   average_humidity = total_humidity / numReadings;
 
   if(iot->serialEnabled()) {
-    /*
     Serial.print("Temperatur: ");
     Serial.println(temperature, 1);
     Serial.print("Luftfeuchtigkeit: ");
@@ -113,7 +153,6 @@ void read_sensor()
     Serial.println(average_temperature, 2);
     Serial.print("average_humidity: ");
     Serial.println(average_humidity, 2);
-    */
   }
 }
 
@@ -175,6 +214,10 @@ void setup() {
       Serial.println("ERROR: MQTT Not Initialized!");
     }
   }
+  
+  #ifdef SENSOR_HTU21D
+  myHumidity.begin();
+  #endif
 
   for (int thisReading = 0; thisReading < numReadings; thisReading++) {
     readings_temperature[thisReading] = 0;
