@@ -7,7 +7,8 @@
 
 // Select which sensor type is used, uncomment the corresponding line
 //#define SENSOR_DHT22
-# define SENSOR_HTU21D
+//#define SENSOR_HTU21D
+#define SENSOR_SHT_30
 
 // *********************************************************************
 // * Libraries
@@ -20,6 +21,10 @@
 
 #ifdef SENSOR_HTU21D
 #include <SparkFunHTU21D.h>
+#endif
+
+#ifdef SENSOR_SHT_30
+#include <WEMOS_SHT3X.h>
 #endif
 
 
@@ -60,6 +65,11 @@ SimpleDHT22 dht22;
 #ifdef SENSOR_HTU21D
 HTU21D myHumidity;
 #endif
+
+#ifdef SENSOR_SHT_30
+SHT3X sht30(0x45);
+#endif
+
 
 
 // *********************************************************************
@@ -116,7 +126,20 @@ void read_sensor()
   }
   #endif
 
-
+  #ifdef SENSOR_SHT_30
+  if(sht30.get()==0) {
+    humidity = sht30.humidity;
+    temperature = sht30.cTemp;
+  }
+  else {
+    if(iot->serialEnabled()) {
+      Serial.println("Read SHT30 failed"); 
+      delay(2000);
+    }
+    return;    
+  }
+  #endif
+  
   // Init array
   if (!array_initalized) {
     init_array(temperature, humidity);
